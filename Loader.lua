@@ -2015,10 +2015,7 @@ local reanimate=function()
 						end
 					else
 						i.c=sine
-						if lostlog[i] then
-							lostlog[i]=nil
-							print("Cats FE: got "..lostlog.name(part).." back")
-						end
+						lostlog[i]=nil
 						insSet(part,"CanCollide",false) --collisions between hats (or with the map) push them out of place
 						local vel1=vel*noYvelTime+xzvel+extnow
 						if vmagnitude(vel1)>25.01 then
@@ -2040,18 +2037,7 @@ local reanimate=function()
 					insSet(part,"AssemblyAngularVelocity",idlerv)
 				else
 					if i.c and not lostlog[i] then
-						--only prints, changes nothing: tells which hat was lost and why
 						lostlog[i]=true
-						local why=(GetJoints(part)[1] and "something welded it") or ("someone else is simulating it (ReceiveAge "..tostring(insGet(part,"ReceiveAge"))..")")
-						local nearest=nil
-						local ppos=insGet(part,"Position")
-						for _,rp in next,rootparts do
-							local d=vmagnitude(insGet(rp,"Position")-ppos)
-							if (not nearest) or (d<nearest) then
-								nearest=d
-							end
-						end
-						warn("Cats FE: lost "..lostlog.name(part)..": "..why..", nearest other player "..(nearest and (math.floor(nearest*10)/10).." studs" or "none")..", you are "..(math.floor(vmagnitude(pos-ppos)*10)/10).." studs away")
 						local onlost=hooks.onLost
 						if onlost then
 							onlost()
@@ -2316,19 +2302,19 @@ local main=function()
 	----------------------------------------------------------------------------
 	-- the cats. height is in studs, key is the key that turns you into it, song is the file in Music/ (without .mp3)
 	-- dance = the cat has an M animation and its song only starts when M is pressed, every other cat plays its song as soon as it is picked
-	-- ori = which of the 24 orientations the hat needs to stand upright facing forward (calibrate in game with ] and [, see below), lift = studs up/down
+	-- yaw = degrees the cat is turned around its up axis so it faces forward, ori = which of the 24 orientations the hat needs to stand upright, lift = studs up/down
 	----------------------------------------------------------------------------
 	local CATS={
-		{name="Main cat",key="Q",id="131526787092382",height=5.5,song="MainCat",ori=1,lift=0},
-		{name="Maxwell",key="E",id="104266266514503",height=2,song="Maxwell",dance="maxwell",ori=1,lift=0},
-		{name="Oiia",key="R",id="108373103080631",height=1.8,song="OIIA",dance="oiia",ori=1,lift=0},
-		{name="Banana",key="T",id="16828241700",height=4.4,song="Banana",ori=1,lift=0},
-		{name="Army",key="Y",id="78310798256215",height=2.5,song="Army",ori=1,lift=0},
-		{name="Meimei",key="U",id="81948394859968",height=1.7,song="MeiMei",ori=1,lift=0},
-		{name="Glungus",key="I",id="98270823827811",height=2,song="Glungus",ori=1,lift=0},
-		{name="Dance",key="O",id="101245075751229",height=2.3,song="Dance",ori=1,lift=0},
-		{name="Drool",key="P",id="113043218431131",height=5.1,song="Drool",ori=1,lift=0},
-		{name="McDonalds",key="F",id="88614740888473",height=2.2,song="Mcdonalds",ori=1,lift=0}
+		{name="Main cat",yaw=0,key="Q",id="131526787092382",height=5.5,song="MainCat",ori=1,lift=0},
+		{name="Maxwell",yaw=90,key="E",id="104266266514503",height=2,song="Maxwell",dance="maxwell",ori=1,lift=0},
+		{name="Oiia",yaw=180,key="R",id="108373103080631",height=1.8,song="OIIA",dance="oiia",ori=1,lift=0},
+		{name="Banana",yaw=0,key="T",id="16828241700",height=4.4,song="Banana",ori=1,lift=0},
+		{name="Army",yaw=-90,key="Y",id="78310798256215",height=2.5,song="Army",ori=1,lift=0},
+		{name="Meimei",yaw=180,key="U",id="81948394859968",height=1.7,song="MeiMei",ori=1,lift=0},
+		{name="Glungus",yaw=180,key="I",id="98270823827811",height=2,song="Glungus",ori=1,lift=0},
+		{name="Dance",yaw=0,key="O",id="101245075751229",height=2.3,song="Dance",ori=1,lift=0},
+		{name="Drool",yaw=0,key="P",id="113043218431131",height=5.1,song="Drool",ori=1,lift=0},
+		{name="McDonalds",yaw=0,key="F",id="88614740888473",height=2.2,song="Mcdonalds",ori=1,lift=0}
 	}
 	local ALL_IDS={}
 	local SONGS={} --file name -> {name=file name, asset=getcustomasset path}
@@ -2342,8 +2328,8 @@ local main=function()
 	----------------------------------------------------------------------------
 	--the axis a turn happens around, in the space of the player: "X" = right (tips forward/back), "Y" = up (turns left/right), "Z" = forward (tilts left/right)
 	local WALK_AXIS="Y"
-	local DANCE_AXIS="Y" --maxwell
-	local SPIN_AXIS="X" --oiia
+	local DANCE_AXIS="Z" --maxwell (tilts left and right)
+	local SPIN_AXIS="Y" --oiia (spins around its up axis)
 	local AIR_AXIS="X" --the small lean while jumping/falling
 	local WALK_HOP=0.3 --studs the cat bounces up while walking
 	local WALK_TURN=rad(20) --degrees it turns left and then right while walking
@@ -2461,9 +2447,6 @@ local main=function()
 				FindFirstChildOfClass(game,"ReplicatedStorage"):WaitForChild("DefaultChatSystemChatEvents",5).SayMessageRequest:FireServer(message,"All")
 			end
 		end)
-		if not ok then
-			warn("Cats FE: couldnt send chat message: "..tostring(err))
-		end
 	end
 
 	local hatmeshes={} --asset id -> {m=meshid,t=textureid} or false if it couldnt be loaded
@@ -2521,7 +2504,7 @@ local main=function()
 		print("Press 9 to load required hats (Just a baseplate only)")
 		print("After loading hats, press 0 to reanimate, again to stop")
 		print(" ")
-		warn("[--- Cats ---]")
+		warn("[--- Keybinds ---]")
 		for _,cat in next,CATS do
 			print(cat.key.." - "..cat.name)
 		end
@@ -2530,8 +2513,6 @@ local main=function()
 		print(" ")
 		print("Up Arrow - increase volume")
 		print("Down Arrow - decrease volume")
-		print(" ")
-		print("] - calibration: next cat, [ - next orientation, = / - - up / down")
 	end
 
 	----------------------------------------------------------------------------
@@ -2577,10 +2558,7 @@ local main=function()
 	local job=function(f)
 		PRE.pending=PRE.pending+1
 		tspawn(function()
-			local ok,err=pcall(f)
-			if not ok then
-				warn("Cats FE: preloading failed: "..tostring(err))
-			end
+			pcall(f)
 			PRE.pending=PRE.pending-1
 		end)
 	end
@@ -2602,12 +2580,27 @@ local main=function()
 			for _,base in next,REPOS do
 				for _,file in next,names do
 					local url=base.."Music/"..urlencode(file)
-					local ok,res=pcall(game.HttpGet,game,url)
-					if ok and isMp3(res) then
-						data=res
+					for attempt=1,2 do
+						local ok,res=pcall(game.HttpGet,game,url)
+						if not (ok and isMp3(res)) then
+							local req=request or http_request or (syn and syn.request) or (http and http.request)
+							if req then
+								local ok2,r=pcall(req,{Url=url,Method="GET"})
+								if ok2 and type(r)=="table" then
+									ok,res=true,r.Body
+								end
+							end
+						end
+						if ok and isMp3(res) then
+							data=res
+							break
+						end
+						tinsert(tried,url.." ("..tostring(ok and (type(res)=="string" and (#res.." bytes") or type(res)) or res)..")")
+						twait(0.5)
+					end
+					if data then
 						break
 					end
-					tinsert(tried,url)
 				end
 				if data then
 					break
@@ -2631,12 +2624,14 @@ local main=function()
 					local ok,err=pcall(downloadSong,song)
 					if not ok then
 						song.failed=true
-						warn("Cats FE: couldnt load the song "..song.name..": "..tostring(err))
+						--nothing in the console, the reason is written to CatsFE/log.txt in the executor workspace
+						pcall(function()
+							local old=(isfile(FOLDER.."/log.txt") and readfile(FOLDER.."/log.txt")) or ""
+							writefile(FOLDER.."/log.txt",old..song.name..": "..tostring(err).."\n")
+						end)
 					end
 				end)
 			end
-		else
-			warn("Cats FE: your executor cant write files / getcustomasset, there will be no music")
 		end
 		job(function()
 			fetchAll(ALL_IDS,30) --mesh and texture ids of all the hats
@@ -2767,19 +2762,10 @@ local main=function()
 		end
 	end
 	local loadHats=function()
-		if game.PlaceId~=JUST_A_BASEPLATE then
-			warn("Cats FE: hats only load in Just A Baseplate")
-			return
-		end
-		if c then
-			warn("Cats FE: stop the reanimate first (press 0), then load the hats")
-			return
-		end
-		if hatsBusy then
+		if (game.PlaceId~=JUST_A_BASEPLATE) or c or hatsBusy then
 			return
 		end
 		hatsBusy=true
-		print("Cats FE: loading hats...")
 		showLoading("Wait!","The hats are loading, do not touch anything",10)
 		tspawn(function()
 			typeChat("/e -ch")
@@ -2868,7 +2854,6 @@ local main=function()
 		starting=true
 		local fine,err=pcall(function()
 			if not PRE.ready then
-				print("Cats FE: still preloading, one moment...")
 				local waited=0
 				while (not PRE.ready) and (waited<40) do
 					twait(0.1)
@@ -2882,7 +2867,6 @@ local main=function()
 			local t=reanimate()
 			aligns=backup
 			if type(t)~="table" then
-				warn("Cats FE: couldnt start")
 				return
 			end
 
@@ -2903,7 +2887,7 @@ local main=function()
 			local S={ --everything that changes while you play
 				cat=0,kind="idle",
 				walkW=0,wph=0,air=0,
-				dance=false,dW=0,dph=0,wpts=nil,
+				dance=false,dW=0,dph=0,wpts=nil,danceT0=0,
 				rise=0,spin=0,bob=0,ox=0,oz=0,
 				nextResolve=0
 			}
@@ -2955,23 +2939,8 @@ local main=function()
 				end
 			end
 			resolve()
-			do
-				local count=0
-				local lost={}
-				for idx,cat in next,CATS do
-					if items[idx] then
-						count=count+1
-					else
-						tinsert(lost,cat.name..(hatmeshes[cat.id] and "" or " (mesh lookup failed)"))
-					end
-				end
-				print("Cats FE: reanimated, found "..count.." of "..#CATS.." cats")
-				if #lost>0 then
-					warn("Cats FE: these cats are not worn (press 9 to load the hats first, a hat can also be missing): "..table.concat(lost,", "))
-				end
-			end
 
-			--puts a hat at target, relative to the given part. rot turns the hat itself (calibration)
+			--puts a hat at target, relative to the given part. rot turns the hat itself
 			local place=function(h,parent,target,rot)
 				local j=h.joint
 				j.Part1=parent
@@ -3003,34 +2972,11 @@ local main=function()
 				S.dance=not S.dance
 				if S.dance then
 					S.wpts=newWanderPoints()
+					S.danceT0=sine
 					music.play(cat.song)
 				else
 					music.stop()
 				end
-			end
-
-			----------------------------------------------------------------
-			-- calibration keys
-			----------------------------------------------------------------
-			local calibrate=function(keyName)
-				if keyName=="RightBracket" then
-					selectCat((S.cat % #CATS)+1)
-					local cat=CATS[S.cat]
-					print("Cats FE: "..cat.name.." (ori="..cat.ori.." of 24, lift="..cat.lift..")  [ next orientation, = / - up / down, ] next cat")
-					return
-				end
-				local cat=CATS[S.cat]
-				if not cat then
-					return
-				end
-				if keyName=="LeftBracket" then
-					cat.ori=(cat.ori % 24)+1
-				elseif keyName=="Equals" then
-					cat.lift=floor((cat.lift+0.1)*10+0.5)/10
-				else
-					cat.lift=floor((cat.lift-0.1)*10+0.5)/10
-				end
-				print("Cats FE: "..cat.name.."   ->   ori="..cat.ori..", lift="..cat.lift)
 			end
 
 			----------------------------------------------------------------
@@ -3078,8 +3024,10 @@ local main=function()
 				--oiia: M. the moves follow the position of the song, so it starts over every time the song loops
 				local snd=music.sound
 				local oiia=dancing and (cat.dance=="oiia")
-				if oiia and snd and snd.IsPlaying and (music.current==cat.song) and S.wpts then
-					local a,b,ox,oz=oiiaAt(snd.TimePosition,S.wpts)
+				if oiia and S.wpts then
+					--the position of the song when it plays, otherwise the time since M was pressed (so it also moves while the song is still loading or missing)
+					local pos=(snd and snd.IsPlaying and (music.current==cat.song)) and snd.TimePosition or (sine-S.danceT0)
+					local a,b,ox,oz=oiiaAt(pos,S.wpts)
 					S.spin=((a+pi)%(2*pi))-pi
 					S.bob=b
 					S.ox=ox
@@ -3101,7 +3049,7 @@ local main=function()
 						local ct=CATS[idx]
 						--the bottom of the cat is on the ground (the root part is 3 studs above it)
 						local target=cfMul(cf(S.ox,-GROUND_TO_ROOT+ct.height/2+ct.lift+y,S.oz),rot)
-						place(h,rootP,target,ORI24[ct.ori])
+						place(h,rootP,target,cfMul(angles(0,rad(ct.yaw),0),ORI24[ct.ori]))
 					else
 						place(h,rootP,hideCF) --like NoctaliaGlitcher: under the root part, moving with you
 					end
@@ -3126,8 +3074,6 @@ local main=function()
 					toggleDance()
 				elseif name=="Up" then music.volumeStep(0.1)
 				elseif name=="Down" then music.volumeStep(-0.1)
-				elseif (name=="RightBracket") or (name=="LeftBracket") or (name=="Equals") or (name=="Minus") then
-					calibrate(name)
 				end
 			end))
 
@@ -3151,7 +3097,6 @@ local main=function()
 		end)
 		starting=false
 		if not fine then
-			warn("Cats FE: "..tostring(err))
 			stopAll()
 		end
 	end
