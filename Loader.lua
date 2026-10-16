@@ -2306,10 +2306,10 @@ local main=function()
 	----------------------------------------------------------------------------
 	local CATS={
 		{name="Main cat",yaw=0,key="Q",id="131526787092382",height=5.5,song="MainCat",ori=1,lift=0},
-		{name="Maxwell",yaw=90,key="E",id="104266266514503",height=2,song="Maxwell",dance="maxwell",ori=1,lift=0},
+		{name="Maxwell",yaw=270,key="E",id="104266266514503",height=2,song="Maxwell",dance="maxwell",ori=1,lift=0},
 		{name="Oiia",yaw=180,key="R",id="108373103080631",height=1.8,song="OIIA",dance="oiia",ori=1,lift=0},
 		{name="Banana",yaw=0,key="T",id="16828241700",height=4.4,song="Banana",ori=1,lift=0},
-		{name="Army",yaw=-90,key="Y",id="78310798256215",height=2.5,song="Army",ori=1,lift=0},
+		{name="Army",yaw=90,key="Y",id="78310798256215",height=2.5,song="Army",ori=1,lift=0},
 		{name="Meimei",yaw=180,key="U",id="81948394859968",height=1.7,song="MeiMei",ori=1,lift=0},
 		{name="Glungus",yaw=180,key="I",id="98270823827811",height=2,song="Glungus",ori=1,lift=0},
 		{name="Dance",yaw=0,key="O",id="101245075751229",height=2.3,song="Dance",ori=1,lift=0},
@@ -2338,8 +2338,7 @@ local main=function()
 	local DANCE_HOP=0.1 --maxwell: "kinda bounce but not really"
 	local DANCE_TURN=rad(45) --maxwell: turns this far left and right
 	local DANCE_RATE=5.5 --maxwell: radians per second, one left+right takes 2*pi/this seconds
-	--oiia: goes up OIIA_RISE studs, then repeats: fast spin (7 spins/hops in 1.9s), 1s normal, slower spin (1.9s), 1s normal.
-	--after that has run for another 13 seconds it wanders around inside a 2 stud square for 10s, then goes back to spinning until the song loops
+	--oiia: goes up OIIA_RISE studs, then fast spin (7 spins/hops in 1.9s), 1s normal, slower spin (1.9s), 1s normal, then the fast spin until the song ends
 	local OIIA_RISE=2
 	local OIIA_HOP=0.5
 	local OIIA_FAST_TIME=1.9
@@ -2567,6 +2566,18 @@ local main=function()
 	local isMp3=function(d)
 		return (type(d)=="string") and (#d>10000) and ((d:sub(1,3)=="ID3") or ((d:byte(1)==255) and (d:byte(2)>=224)))
 	end
+	local stripTag=function(d)
+		if d:sub(1,3)~="ID3" then
+			return d
+		end
+		local b6,b7,b8,b9=d:byte(7,10)
+		local start=10+b6*2097152+b7*16384+b8*128+b9 --0 based start of the audio
+		local s1,s2=d:byte(start+1,start+2)
+		if s1==255 and s2 and s2>=224 then
+			return d:sub(start+1)
+		end
+		return d
+	end
 	local downloadSong=function(song)
 		local path=FOLDER.."/Music/"..song.name..".mp3"
 		local data=isfile(path) and readfile(path)
@@ -2610,6 +2621,11 @@ local main=function()
 				error("no mp3 found, tried:\n"..table.concat(tried,"\n"))
 			end
 			writefile(path,data)
+		end
+		--Roblox can refuse an mp3 that starts with an ID3v2.4 tag (Dance.mp3), so the tag is cut off when the audio frames start right behind it
+		local tag=stripTag(data)
+		if tag~=data then
+			writefile(path,tag)
 		end
 		song.asset=getcustomasset(path)
 	end
@@ -2809,38 +2825,20 @@ local main=function()
 	-- oiia: what the cat does at a second of the song (spin angle, extra height, sideways offset x and z)
 	----------------------------------------------------------------------------
 	local newWanderPoints=function()
-		local pts={{0,0}}
-		for _=1,OIIA_WANDER_STEPS-1 do
-			tinsert(pts,{(mrandom()*2-1)*OIIA_WANDER_HALF,(mrandom()*2-1)*OIIA_WANDER_HALF})
-		end
-		tinsert(pts,{0,0}) --it ends where it started
-		return pts
+		return {}
 	end
-	local oiiaAt=function(t,pts)
-		if t>=OIIA_WANDER_AT and t<OIIA_WANDER_END then
-			local w=(t-OIIA_WANDER_AT)/OIIA_WANDER_STEP
-			local k=min(floor(w),OIIA_WANDER_STEPS-1)
-			local f=smooth(w-k) --tweens from spot to spot
-			local a,b=pts[k+1],pts[k+2]
-			return 0,0,lerpn(a[1],b[1],f),lerpn(a[2],b[2],f)
-		end
-		local p
-		if t<OIIA_WANDER_AT then
-			p=t%OIIA_CYCLE
-		else
-			p=(t-OIIA_WANDER_END)%OIIA_CYCLE
-		end
-		local cycles,u
-		if p<OIIA_FAST_TIME then
-			cycles=OIIA_FAST_CYCLES
-			u=p/OIIA_FAST_TIME
-		elseif (p>=OIIA_FAST_TIME+OIIA_GAP) and (p<OIIA_FAST_TIME+OIIA_GAP+OIIA_SLOW_TIME) then
-			cycles=OIIA_SLOW_CYCLES
-			u=(p-OIIA_FAST_TIME-OIIA_GAP)/OIIA_SLOW_TIME
+	--fast spin, 1s normal, slower spin, 1s normal, and from then on the fast spin goes on until the song ends
+	local oiiaAt=function(t)
+		local cyc
+		if t>=OIIA_CYCLE then
+			cyc=OIIA_FAST_CYCLES*(t-OIIA_CYCLE)/OIIA_FAST_TIME
+		elseif t<OIIA_FAST_TIME then
+			cyc=OIIA_FAST_CYCLES*t/OIIA_FAST_TIME
+		elseif (t>=OIIA_FAST_TIME+OIIA_GAP) and (t<OIIA_FAST_TIME+OIIA_GAP+OIIA_SLOW_TIME) then
+			cyc=OIIA_SLOW_CYCLES*(t-OIIA_FAST_TIME-OIIA_GAP)/OIIA_SLOW_TIME
 		else
 			return 0,0,0,0
 		end
-		local cyc=cycles*u
 		return 2*pi*cyc,OIIA_HOP*sin(pi*(cyc%1)),0,0
 	end
 
@@ -3027,7 +3025,7 @@ local main=function()
 				if oiia and S.wpts then
 					--the position of the song when it plays, otherwise the time since M was pressed (so it also moves while the song is still loading or missing)
 					local pos=(snd and snd.IsPlaying and (music.current==cat.song)) and snd.TimePosition or (sine-S.danceT0)
-					local a,b,ox,oz=oiiaAt(pos,S.wpts)
+					local a,b,ox,oz=oiiaAt(pos)
 					S.spin=((a+pi)%(2*pi))-pi
 					S.bob=b
 					S.ox=ox
