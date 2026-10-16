@@ -2301,7 +2301,7 @@ local main=function()
 	if genv.CatsRepo then
 		tinsert(REPOS,(genv.CatsRepo:sub(-1)=="/") and genv.CatsRepo or (genv.CatsRepo.."/"))
 	end
-	tinsert(REPOS,"https://raw.githubusercontent.com/NoctaliaLua/NoctaliaScripts/main/CatsFE/")
+	tinsert(REPOS,"https://raw.githubusercontent.com/NoctaliaLua/CatsFE/main/")
 	local FOLDER="CatsFE" --executor workspace folder the songs are saved in
 	local RESPAWN_ON_STOP=true --pressing 0 to stop also respawns your real character (JustABaseplate only)
 	local HIDE_DEPTH=19 --hidden hats sit this many studs below the root part (same as NoctaliaGlitcher)
